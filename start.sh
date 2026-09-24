@@ -41,7 +41,6 @@ done
 
 LoadDotEnv
 InitAppPaths
-EnsureGo
 
 AlreadyRunning() {
     local old_pid
@@ -54,6 +53,12 @@ AlreadyRunning() {
     return 1
 }
 
+# 已打包二进制存在则直接启动，不要求本机安装 Go
+BinaryReady() {
+    # Windows 下可执行文件未必带 +x，存在即可
+    [[ -f "$BIN_PATH" ]]
+}
+
 if [[ "$KILL_PORT" -eq 1 ]]; then
     StopPortListeners "$APP_PORT" || true
     ClearPidFile
@@ -61,16 +66,19 @@ elif AlreadyRunning; then
     exit 1
 fi
 
-if [[ "$REBUILD" -eq 1 || ! -x "$BIN_PATH" ]]; then
-    if [[ ! -f "$BIN_PATH" || "$REBUILD" -eq 1 ]]; then
-        echo "Building via 1Build.sh ..."
+if [[ "$REBUILD" -eq 1 ]] || ! BinaryReady; then
+    EnsureGo
+    echo "Building via 1Build.sh ..."
+    if [[ "$REBUILD" -eq 1 ]]; then
+        "$ROOT_DIR/1Build.sh" --clean
+    else
         "$ROOT_DIR/1Build.sh"
     fi
 fi
 
-# Windows 下可执行文件未必带 +x，存在即可
-if [[ ! -f "$BIN_PATH" ]]; then
-    echo "二进制不存在: $BIN_PATH ，请先 ./1Build.sh" >&2
+if ! BinaryReady; then
+    echo "二进制不存在: $BIN_PATH" >&2
+    echo "请先在有 Go 的机器执行 ./1Build.sh，再把 ${BIN_NAME} 一并拷贝过来；或本机安装 Go 后重试。" >&2
     exit 1
 fi
 
